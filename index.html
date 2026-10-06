@@ -162,9 +162,11 @@ button:disabled{opacity:.5;cursor:not-allowed}
   if(!state.nextId) state.nextId = 1;
 
   var artifactCap = null;
+  var artifactChecked = false; // true once claude.use("artifact") has resolved (even to null)
   var canWrite = true; // optimistic until proven otherwise
   var saveTimer = null;
-  var saveState = "idle"; // idle | busy | ok | err | readonly
+  var saveState = "idle"; // idle | busy | ok | err | readonly | nocap
+  var lastErrorDetail = "";
   var activeTab = "batches"; // batches | pending | daily (not persisted — resets to Batches on open)
 
   var TEMPLATES = {
@@ -472,15 +474,20 @@ button:disabled{opacity:.5;cursor:not-allowed}
   function saveDotClass(){
     if(saveState === "ok") return "ok";
     if(saveState === "busy") return "busy";
-    if(saveState === "err" || saveState === "readonly") return "err";
+    if(saveState === "err" || saveState === "readonly" || saveState === "nocap") return "err";
     return "";
   }
   function saveLabel(){
     if(saveState === "ok") return "Saved";
     if(saveState === "busy") return "Saving…";
     if(saveState === "readonly") return "Read-only here";
-    if(saveState === "err") return "Couldn't save — edits may not persist";
+    if(saveState === "nocap") return "This view can't save — try the claude.ai site or update the Claude app";
+    if(saveState === "err") return "Couldn't save" + (lastErrorDetail ? " (" + esc(lastErrorDetail) + ")" : "") + " — edits may not persist";
     return "";
+  }
+  function saveRetryHtml(){
+    if(saveState !== "err") return "";
+    return '<button type="button" class="ghost small" data-action="retry-save">Retry</button>';
   }
 
   function render(){
@@ -495,7 +502,7 @@ button:disabled{opacity:.5;cursor:not-allowed}
     root.innerHTML =
       '<div class="hdr">' +
         '<div><h1>Batch Checklist Tracker</h1><div class="sub">PSW &amp; ECA batches, pending students, and your daily tasks — all in one place</div></div>' +
-        '<div class="save-state"><span class="save-dot ' + saveDotClass() + '"></span>' + saveLabel() + '</div>' +
+        '<div class="save-state"><span class="save-dot ' + saveDotClass() + '"></span><span>' + saveLabel() + '</span>' + saveRetryHtml() + '</div>' +
       '</div>' +
       renderTabs() +
       tabContent;
@@ -541,17 +548,24 @@ button:disabled{opacity:.5;cursor:not-allowed}
   }
 
   function doSave(){
+    if(!artifactChecked){
+      // claude.use("artifact") hasn't resolved yet — wait briefly and retry once it has,
+      // rather than reporting a false failure during normal page load.
+      saveTimer = setTimeout(doSave, 400);
+      return;
+    }
     if(!artifactCap){
-      saveState = "err";
+      saveState = "nocap";
       render();
       return;
     }
     var fullHtml = '<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,-apple-system,sans-serif;background:#fafafa}img{max-width:100%}[hidden]{display:none!important}</style></head><body>' + buildFullDocument() + '</body></html>';
     artifactCap.publish(fullHtml).then(function(){
       saveState = "ok";
+      lastErrorDetail = "";
       render();
     }, function(err){
-      var code = err && err.code;
+      var code = (err && err.code) || "unknown";
       if(code === "not_granted" || code === "not_writer"){
         canWrite = false;
         saveState = "readonly";
@@ -559,6 +573,7 @@ button:disabled{opacity:.5;cursor:not-allowed}
         saveState = "ok"; // another save won; this view reloads to it
       } else {
         saveState = "err";
+        lastErrorDetail = code;
       }
       render();
     });
@@ -624,6 +639,7 @@ button:disabled{opacity:.5;cursor:not-allowed}
       return;
     }
     if(action === "delete-no"){ render(); return; }
+    if(action === "retry-save"){ scheduleSave(true); return; }
 
     if(action === "filter-program"){ state.filter.program = el.getAttribute("data-value"); render(); scheduleSave(); return; }
     if(action === "filter-campus"){ state.filter.campus = el.getAttribute("data-value"); render(); scheduleSave(); return; }
@@ -750,7 +766,13 @@ button:disabled{opacity:.5;cursor:not-allowed}
   render();
 
   if(window.claude && window.claude.use){
-    window.claude.use("artifact").then(function(cap){ artifactCap = cap; });
+    window.claude.use("artifact").then(function(cap){
+      artifactCap = cap;
+      artifactChecked = true;
+      if(!cap && saveState === "busy"){ saveState = "nocap"; render(); }
+    });
+  } else {
+    artifactChecked = true;
   }
 })();
 </script>

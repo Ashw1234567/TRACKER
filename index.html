@@ -1,0 +1,791 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Batch Checklist Tracker</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style id="app-style">
+/* Layout: sticky summary header, tab nav (Batches / Pending students / Daily tasks), responsive card grid below */
+:root{
+  --bg:#eef2f0;
+  --surface:#ffffff;
+  --fg:#17221d;
+  --muted:#5c6b64;
+  --line:#dde4e0;
+  --accent:#0d6e5f;
+  --accent-ink:#ffffff;
+  --accent-soft:#e2f0ec;
+  --done:#1f8a5f;
+  --done-soft:#e3f5ea;
+  --partial:#b9792a;
+  --partial-soft:#faeedd;
+  --none:#8a9089;
+  --none-soft:#eceeec;
+  --danger:#b23b3b;
+  --font-display:'Sora',system-ui,sans-serif;
+  --font-body:'IBM Plex Sans',system-ui,sans-serif;
+  --font-mono:'IBM Plex Mono',monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --bg:#121715;
+    --surface:#1a211e;
+    --fg:#e9efec;
+    --muted:#9aa8a1;
+    --line:#2a332e;
+    --accent:#4fcbb0;
+    --accent-ink:#0c1a16;
+    --accent-soft:#1b3630;
+    --done:#4fcb84;
+    --done-soft:#17301f;
+    --partial:#e0a84f;
+    --partial-soft:#352a16;
+    --none:#8a9089;
+    --none-soft:#242a26;
+    --danger:#e07a7a;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#121715;
+  --surface:#1a211e;
+  --fg:#e9efec;
+  --muted:#9aa8a1;
+  --line:#2a332e;
+  --accent:#4fcbb0;
+  --accent-ink:#0c1a16;
+  --accent-soft:#1b3630;
+  --done:#4fcb84;
+  --done-soft:#17301f;
+  --partial:#e0a84f;
+  --partial-soft:#352a16;
+  --none:#8a9089;
+  --none-soft:#242a26;
+  --danger:#e07a7a;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--font-body)}
+#root{padding:16px;padding-block:20px 48px;max-width:960px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+h1,h2,h3{font-family:var(--font-display);margin:0;text-wrap:balance}
+.hdr{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:8px}
+.hdr h1{font-size:22px;letter-spacing:-0.01em}
+.hdr .sub{color:var(--muted);font-size:13px}
+.save-state{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px;min-width:0}
+.save-dot{width:7px;height:7px;border-radius:50%;background:var(--none);flex:none}
+.save-dot.ok{background:var(--done)}
+.save-dot.busy{background:var(--partial)}
+.save-dot.err{background:var(--danger)}
+.tabs{display:flex;gap:4px;flex-wrap:wrap;border-bottom:1px solid var(--line)}
+.tab-btn{background:transparent;color:var(--muted);border:none;border-bottom:2px solid transparent;border-radius:0;padding:10px 6px;font-weight:600;display:flex;align-items:center;gap:6px}
+.tab-btn.active{color:var(--accent);border-bottom-color:var(--accent)}
+.tab-badge{background:var(--partial-soft);color:var(--partial);font-size:11px;padding:1px 7px;border-radius:999px;font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+.tab-badge.zero{background:var(--none-soft);color:var(--muted)}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.stat .n{font-family:var(--font-mono);font-size:22px;font-variant-numeric:tabular-nums;line-height:1.1}
+.stat .l{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.stat.done .n{color:var(--done)}
+.stat.partial .n{color:var(--partial)}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px}
+.add-form{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end}
+.field{display:flex;flex-direction:column;gap:4px;min-width:0}
+.field label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+input[type=text],select{font:inherit;font-size:14px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg);min-width:0}
+input[type=text]:focus,select:focus,button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.grow{flex:1 1 180px}
+button{font:inherit;font-size:13px;cursor:pointer;border:none;border-radius:8px;padding:8px 14px;background:var(--accent);color:var(--accent-ink);font-weight:600}
+button.ghost{background:transparent;color:var(--muted);border:1px solid var(--line)}
+button.danger-ghost{background:transparent;color:var(--danger);border:1px solid var(--danger)}
+button.small{padding:4px 9px;font-size:12px}
+button:disabled{opacity:.5;cursor:not-allowed}
+.filters{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.chip-row{display:flex;gap:6px;flex-wrap:wrap}
+.chip{font-size:12px;padding:5px 10px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--muted);cursor:pointer}
+.chip.active{background:var(--accent-soft);color:var(--accent);border-color:var(--accent);font-weight:600}
+.search{flex:1 1 160px}
+.batches{display:flex;flex-direction:column;gap:12px}
+.empty{color:var(--muted);text-align:center;padding:28px 12px;font-size:14px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.card-hdr{display:flex;align-items:center;gap:10px;padding:12px 14px;cursor:pointer}
+.chev{flex:none;transition:transform .15s;color:var(--muted)}
+.card.open .chev{transform:rotate(90deg)}
+.card-title{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
+.card-title .name{font-family:var(--font-mono);font-size:15px;font-weight:600;overflow-wrap:anywhere}
+.card-title .badges{display:flex;gap:6px;flex-wrap:wrap}
+.badge{font-size:11px;padding:2px 8px;border-radius:999px;background:var(--bg);color:var(--muted);border:1px solid var(--line)}
+.badge.example{background:var(--partial-soft);color:var(--partial);border-color:transparent}
+.progress-wrap{flex:none;display:flex;align-items:center;gap:8px;min-width:120px}
+.bar{width:72px;height:6px;border-radius:3px;background:var(--none-soft);overflow:hidden}
+.bar-fill{height:100%;border-radius:3px}
+.pct{font-family:var(--font-mono);font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;width:34px;text-align:right}
+.status-pill{font-size:11px;padding:3px 9px;border-radius:999px;font-weight:600;flex:none}
+.status-pill.done{background:var(--done-soft);color:var(--done)}
+.status-pill.partial{background:var(--partial-soft);color:var(--partial)}
+.status-pill.none{background:var(--none-soft);color:var(--muted)}
+.card-body{border-top:1px solid var(--line);padding:14px;display:flex;flex-direction:column;gap:16px}
+.rename-row{display:flex;gap:8px;flex-wrap:wrap}
+.section{display:flex;flex-direction:column;gap:8px}
+.section h3{font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;font-family:var(--font-body);font-weight:600}
+.item{display:flex;align-items:flex-start;gap:10px;padding:8px;border-radius:8px;background:var(--bg)}
+.item input[type=checkbox]{width:18px;height:18px;accent-color:var(--accent);margin-top:2px;flex:none}
+.item .item-body{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px}
+.item .item-label{font-size:13px;font-weight:600}
+.item.checked .item-label{color:var(--done)}
+.item input[type=text]{width:100%}
+.card-footer{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.confirm-row{display:flex;gap:8px;align-items:center;font-size:12px;color:var(--muted)}
+.meta-note{font-size:11px;color:var(--muted)}
+.dashed-note{background:var(--bg);border:1px dashed var(--line);border-radius:10px;padding:12px;color:var(--muted);font-size:13px}
+.stack{display:flex;flex-direction:column;gap:6px}
+.right{display:flex;justify-content:flex-end}
+.daily-row{display:flex;align-items:center;gap:10px;padding:8px;border-radius:8px;background:var(--bg)}
+.daily-row input[type=checkbox]{width:18px;height:18px;accent-color:var(--accent);flex:none}
+.daily-row .txt{flex:1;min-width:0;font-size:13px;font-weight:500;overflow-wrap:anywhere}
+.daily-row.checked .txt{text-decoration:line-through;color:var(--muted)}
+@media (max-width:640px){
+  .stats{grid-template-columns:repeat(2,1fr)}
+  .progress-wrap{min-width:90px}
+  .bar{width:48px}
+}
+</style>
+<div id="root"></div>
+<script id="state-data" type="application/json">
+{"nextId":3,"filter":{"program":"PSW","campus":"all","status":"complete","q":""},"dailyTasks":[],"batches":[{"id":2,"name":"26 June M(A)","program":"ECA","campus":"Mississauga","expanded":true,"example":false,"createdAt":"2026-10-06T00:56:31.338Z","sections":{"part1":{"assignmentSubmissions":{"done":false,"note":""},"placementBooklet":{"done":false,"note":""},"attendanceMarking":{"done":false,"note":""}},"part2":{"assignmentSubmissions":{"done":false,"note":""},"attendanceForms":{"done":false,"note":""},"attendanceMarking":{"done":false,"note":""}}}},{"id":1,"name":"21 July M(A)","program":"PSW","campus":"Mississauga","expanded":true,"example":true,"createdAt":"2026-07-21T00:00:00.000Z","sections":{"performance":{"dates":{"done":true,"note":"Jul 21–25"},"instructor":{"done":true,"note":"J. Grant"},"grades":{"done":false,"note":""}},"moodle":{"submissions":{"done":true,"note":"18/20 in"},"grading":{"done":true,"note":""}},"rewrites":{"done":false,"note":""},"attendance":{"done":true,"note":"Confirmed with instructor"}}}]}
+</script>
+<script id="app-logic">
+(function(){
+  "use strict";
+  var root = document.getElementById("root");
+  var stateScript = document.getElementById("state-data");
+  var state = JSON.parse(stateScript.textContent);
+  if(!state.dailyTasks) state.dailyTasks = [];
+  if(!state.filter) state.filter = {program:"all",campus:"all",status:"all",q:""};
+  if(!state.nextId) state.nextId = 1;
+
+  var artifactCap = null;
+  var canWrite = true; // optimistic until proven otherwise
+  var saveTimer = null;
+  var saveState = "idle"; // idle | busy | ok | err | readonly
+  var activeTab = "batches"; // batches | pending | daily (not persisted — resets to Batches on open)
+
+  var dbCap = null;
+  var pendingCache = [];
+  var pendingDbState = "init"; // init | ok | unavailable | error
+  var canWritePending = true;
+
+  var TEMPLATES = {
+    PSW: { groups: [
+      {key:"performance", title:"Performance demonstrations", items:[["dates","Dates"],["instructor","Instructor"],["grades","Grades"]]},
+      {key:"moodle", title:"Moodle", items:[["submissions","Submissions"],["grading","Grading"]]},
+      {key:"rewrites", title:"Rewrites", items:[[null,"Rewrites"]]},
+      {key:"attendance", title:"Attendance", items:[[null,"Attendance"]]}
+    ]},
+    ECA: { groups: [
+      {key:"part1", title:"Part 1", items:[["assignmentSubmissions","Assignment submissions"],["placementBooklet","Placement booklet"],["attendanceMarking","Attendance marking"]]},
+      {key:"part2", title:"Part 2", items:[["assignmentSubmissions","Assignment submissions"],["attendanceForms","Attendance forms"],["attendanceMarking","Attendance marking"]]}
+    ]}
+  };
+
+  function flatItemPaths(program){
+    var tpl = TEMPLATES[program];
+    if(!tpl) return [];
+    var out = [];
+    tpl.groups.forEach(function(g){
+      g.items.forEach(function(it){ out.push([g.key, it[0], it[1]]); });
+    });
+    return out;
+  }
+
+  function emptySections(program){
+    var tpl = TEMPLATES[program];
+    if(!tpl) return {};
+    var sec = {};
+    tpl.groups.forEach(function(g){
+      if(g.items.length === 1 && g.items[0][0] === null){
+        sec[g.key] = {done:false, note:""};
+      } else {
+        sec[g.key] = {};
+        g.items.forEach(function(it){ sec[g.key][it[0]] = {done:false, note:""}; });
+      }
+    });
+    return sec;
+  }
+
+  function getItem(batch, a, b){
+    if(b) return batch.sections[a][b];
+    return batch.sections[a];
+  }
+
+  function progressOf(batch){
+    var paths = flatItemPaths(batch.program);
+    var done = 0;
+    paths.forEach(function(p){ if(getItem(batch, p[0], p[1]).done) done++; });
+    var total = paths.length;
+    var status = total === 0 ? "none" : (done === 0 ? "none" : (done === total ? "done" : "partial"));
+    return {done:done, total:total, status:status};
+  }
+
+  function esc(s){
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function(c){
+      return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];
+    });
+  }
+
+  function statusLabel(s, total){
+    if(total === 0) return "Set a program";
+    return s === "done" ? "Complete" : (s === "partial" ? "In progress" : "Not started");
+  }
+
+  function matchesFilter(batch){
+    var f = state.filter;
+    if(f.program !== "all" && batch.program !== f.program) return false;
+    if(f.campus !== "all" && batch.campus !== f.campus) return false;
+    if(f.status !== "all"){
+      var st = progressOf(batch).status;
+      if(f.status === "complete" && st !== "done") return false;
+      if(f.status === "incomplete" && st === "done") return false;
+    }
+    if(f.q){
+      var q = f.q.toLowerCase();
+      if(batch.name.toLowerCase().indexOf(q) === -1) return false;
+    }
+    return true;
+  }
+
+  function renderStats(){
+    var total = state.batches.length;
+    var done = 0, partial = 0, none = 0;
+    state.batches.forEach(function(b){
+      var s = progressOf(b).status;
+      if(s === "done") done++; else if(s === "partial") partial++; else none++;
+    });
+    return (
+      '<div class="stats">' +
+        '<div class="stat"><div class="n">' + total + '</div><div class="l">Batches</div></div>' +
+        '<div class="stat done"><div class="n">' + done + '</div><div class="l">Complete</div></div>' +
+        '<div class="stat partial"><div class="n">' + partial + '</div><div class="l">In progress</div></div>' +
+        '<div class="stat"><div class="n">' + none + '</div><div class="l">Not started</div></div>' +
+      '</div>'
+    );
+  }
+
+  function chip(label, active, action, value){
+    return '<button type="button" class="chip' + (active ? ' active' : '') + '" data-action="' + action + '" data-value="' + esc(value) + '">' + esc(label) + '</button>';
+  }
+
+  function renderFilters(){
+    var f = state.filter;
+    return (
+      '<div class="panel filters">' +
+        '<div class="chip-row">' +
+          chip("All programs", f.program==="all", "filter-program", "all") +
+          chip("PSW", f.program==="PSW", "filter-program", "PSW") +
+          chip("ECA", f.program==="ECA", "filter-program", "ECA") +
+        '</div>' +
+        '<div class="chip-row">' +
+          chip("All campuses", f.campus==="all", "filter-campus", "all") +
+          chip("Mississauga", f.campus==="Mississauga", "filter-campus", "Mississauga") +
+          chip("Waterloo", f.campus==="Waterloo", "filter-campus", "Waterloo") +
+        '</div>' +
+        '<div class="chip-row">' +
+          chip("All status", f.status==="all", "filter-status", "all") +
+          chip("Incomplete", f.status==="incomplete", "filter-status", "incomplete") +
+          chip("Complete", f.status==="complete", "filter-status", "complete") +
+        '</div>' +
+        '<input class="search" type="text" placeholder="Search batch name…" data-action="search" value="' + esc(f.q) + '">' +
+      '</div>'
+    );
+  }
+
+  function renderAddForm(){
+    return (
+      '<div class="panel">' +
+        '<div class="add-form">' +
+          '<div class="field grow"><label>Batch name</label><input type="text" id="new-batch-name" placeholder="e.g. 4 Aug D(B)"></div>' +
+          '<div class="field"><label>Program *</label><select id="new-batch-program"><option value="">Select…</option><option value="PSW">PSW</option><option value="ECA">ECA</option></select></div>' +
+          '<div class="field"><label>Campus</label><select id="new-batch-campus"><option value="">—</option><option value="Mississauga">Mississauga</option><option value="Waterloo">Waterloo</option></select></div>' +
+          '<button type="button" data-action="add-batch">Add batch</button>' +
+        '</div>' +
+      '</div>'
+    );
+  }
+
+  function renderItem(batch, a, b, label){
+    var it = getItem(batch, a, b);
+    var path = a + (b ? ("." + b) : "");
+    return (
+      '<label class="item' + (it.done ? ' checked' : '') + '">' +
+        '<input type="checkbox" data-action="toggle-item" data-batch="' + batch.id + '" data-path="' + path + '"' + (it.done ? " checked" : "") + (canWrite ? "" : " disabled") + '>' +
+        '<span class="item-body">' +
+          '<span class="item-label">' + esc(label) + '</span>' +
+          '<input type="text" placeholder="Add a note…" data-action="note-item" data-batch="' + batch.id + '" data-path="' + path + '" value="' + esc(it.note) + '"' + (canWrite ? "" : " disabled") + '>' +
+        '</span>' +
+      '</label>'
+    );
+  }
+
+  function renderSectionsForBatch(batch){
+    var tpl = TEMPLATES[batch.program];
+    if(!tpl){
+      return '<div class="dashed-note">Select a program above (PSW or ECA) to load this batch’s checklist.</div>';
+    }
+    return tpl.groups.map(function(g){
+      var itemsHtml = g.items.map(function(it){ return renderItem(batch, g.key, it[0], it[1]); }).join("");
+      return '<div class="section"><h3>' + esc(g.title) + '</h3>' + itemsHtml + '</div>';
+    }).join("");
+  }
+
+  function renderBatch(batch){
+    var prog = progressOf(batch);
+    var pct = prog.total === 0 ? 0 : Math.round((prog.done / prog.total) * 100);
+    var fillColor = prog.status === "done" ? "var(--done)" : (prog.status === "partial" ? "var(--partial)" : "var(--none)");
+    var badges = "";
+    if(batch.program) badges += '<span class="badge">' + esc(batch.program) + '</span>';
+    if(batch.campus) badges += '<span class="badge">' + esc(batch.campus) + '</span>';
+    if(batch.example) badges += '<span class="badge example">Example — edit or delete</span>';
+
+    var body = "";
+    if(batch.expanded){
+      body = (
+        '<div class="card-body">' +
+          '<div class="rename-row">' +
+            '<div class="field grow"><label>Batch name</label><input type="text" data-action="rename-batch" data-batch="' + batch.id + '" value="' + esc(batch.name) + '"' + (canWrite ? "" : " disabled") + '></div>' +
+            '<div class="field"><label>Program</label><select data-action="set-program" data-batch="' + batch.id + '"' + (canWrite ? "" : " disabled") + '>' +
+              '<option value=""' + (!batch.program ? " selected" : "") + '>—</option>' +
+              '<option value="PSW"' + (batch.program==="PSW" ? " selected" : "") + '>PSW</option>' +
+              '<option value="ECA"' + (batch.program==="ECA" ? " selected" : "") + '>ECA</option>' +
+            '</select></div>' +
+            '<div class="field"><label>Campus</label><select data-action="set-campus" data-batch="' + batch.id + '"' + (canWrite ? "" : " disabled") + '>' +
+              '<option value=""' + (!batch.campus ? " selected" : "") + '>—</option>' +
+              '<option value="Mississauga"' + (batch.campus==="Mississauga" ? " selected" : "") + '>Mississauga</option>' +
+              '<option value="Waterloo"' + (batch.campus==="Waterloo" ? " selected" : "") + '>Waterloo</option>' +
+            '</select></div>' +
+          '</div>' +
+          renderSectionsForBatch(batch) +
+          '<div class="card-footer">' +
+            '<span class="meta-note">Added ' + esc(new Date(batch.createdAt).toLocaleDateString()) + '</span>' +
+            (canWrite ? ('<button type="button" class="danger-ghost" data-action="confirm-delete" data-batch="' + batch.id + '">Delete batch</button>') : "") +
+          '</div>' +
+        '</div>'
+      );
+    }
+
+    return (
+      '<div class="card' + (batch.expanded ? ' open' : '') + '" data-batch-card="' + batch.id + '">' +
+        '<div class="card-hdr" data-action="toggle-batch" data-batch="' + batch.id + '">' +
+          '<span class="chev">▸</span>' +
+          '<span class="card-title"><span class="name">' + esc(batch.name) + '</span><span class="badges">' + badges + '</span></span>' +
+          '<span class="progress-wrap">' +
+            '<span class="bar"><span class="bar-fill" style="width:' + pct + '%;background:' + fillColor + '"></span></span>' +
+            '<span class="pct">' + prog.done + '/' + prog.total + '</span>' +
+          '</span>' +
+          '<span class="status-pill ' + prog.status + '">' + statusLabel(prog.status, prog.total) + '</span>' +
+        '</div>' +
+        body +
+      '</div>'
+    );
+  }
+
+  function renderBatches(){
+    var visible = state.batches.filter(matchesFilter);
+    if(state.batches.length === 0){
+      return '<div class="panel empty">No batches yet. Add your first batch above to start tracking its checklist.</div>';
+    }
+    if(visible.length === 0){
+      return '<div class="panel empty">No batches match the current filters.</div>';
+    }
+    return '<div class="batches">' + visible.map(renderBatch).join("") + '</div>';
+  }
+
+  function renderPendingTab(){
+    var addForm = (canWritePending && pendingDbState === "ok") ? (
+      '<div class="panel"><div class="add-form">' +
+        '<div class="field grow"><label>Student name</label><input type="text" id="new-pending-name" placeholder="e.g. Priya Nair"></div>' +
+        '<div class="field grow"><label>Batch</label><input type="text" id="new-pending-batch" placeholder="e.g. 21 July M(A)"></div>' +
+        '<div class="field grow"><label>What’s pending</label><input type="text" id="new-pending-note" placeholder="e.g. Missing Part 2 submission"></div>' +
+        '<button type="button" data-action="add-pending">Add</button>' +
+      '</div></div>'
+    ) : "";
+
+    var list;
+    if(pendingDbState === "unavailable"){
+      list = '<div class="panel empty">Pending students needs this artifact’s database, which isn’t available in this view.</div>';
+    } else if(pendingDbState === "init"){
+      list = '<div class="panel empty">Loading pending list…</div>';
+    } else if(pendingCache.length === 0){
+      list = '<div class="panel empty">Nothing pending right now. Students you flag here stay listed — and in your daily reminder email — until you clear them.</div>';
+    } else {
+      list = '<div class="batches">' + pendingCache.map(renderPendingRow).join("") + '</div>';
+    }
+    return addForm + list;
+  }
+
+  function renderPendingRow(p){
+    return (
+      '<div class="card" data-pending-card="' + esc(p.id) + '">' +
+        '<div class="card-hdr" style="cursor:default">' +
+          '<span class="card-title"><span class="name">' + esc(p.name || "(no name)") + '</span>' +
+          '<span class="badges">' + (p.batch ? ('<span class="badge">' + esc(p.batch) + '</span>') : "") + '</span></span>' +
+        '</div>' +
+        '<div class="card-body">' +
+          '<div class="stack">' +
+            '<span class="meta-note">Pending</span>' +
+            '<span>' + esc(p.pending || "—") + '</span>' +
+          '</div>' +
+          '<div class="card-footer">' +
+            '<span class="meta-note">Flagged ' + esc(p.addedAt ? new Date(p.addedAt).toLocaleDateString() : "") + '</span>' +
+            (canWritePending ? ('<button type="button" class="danger-ghost" data-action="confirm-clear-pending" data-pending="' + esc(p.id) + '">Clear</button>') : "") +
+          '</div>' +
+        '</div>' +
+      '</div>'
+    );
+  }
+
+  function renderDailyTab(){
+    var addForm = canWrite ? (
+      '<div class="panel"><div class="add-form">' +
+        '<div class="field grow"><label>New task</label><input type="text" id="new-daily-text" placeholder="e.g. Email Johanna re: Aug cohort"></div>' +
+        '<button type="button" data-action="add-daily">Add</button>' +
+      '</div></div>'
+    ) : "";
+    var tasks = state.dailyTasks || [];
+    var list;
+    if(tasks.length === 0){
+      list = '<div class="panel empty">No daily tasks yet. Add one above — it’ll stay here until you remove it.</div>';
+    } else {
+      list = '<div class="panel stack">' + tasks.map(renderDailyRow).join("") + '</div>';
+    }
+    var hasDone = tasks.some(function(t){ return t.done; });
+    var clearBtn = (canWrite && hasDone) ? '<div class="right"><button type="button" class="ghost small" data-action="clear-done-daily">Clear completed</button></div>' : "";
+    return addForm + list + clearBtn;
+  }
+
+  function renderDailyRow(t){
+    return (
+      '<div class="daily-row' + (t.done ? ' checked' : '') + '">' +
+        '<input type="checkbox" data-action="toggle-daily" data-daily="' + t.id + '"' + (t.done ? " checked" : "") + (canWrite ? "" : " disabled") + '>' +
+        '<span class="txt">' + esc(t.text) + '</span>' +
+        (canWrite ? ('<button type="button" class="ghost small" data-action="delete-daily" data-daily="' + t.id + '">Remove</button>') : "") +
+      '</div>'
+    );
+  }
+
+  function renderTabs(){
+    function tabBtn(key, label, badge){
+      var badgeHtml = badge != null ? ('<span class="tab-badge' + (badge === 0 ? ' zero' : '') + '">' + badge + '</span>') : "";
+      return '<button type="button" class="tab-btn' + (activeTab === key ? ' active' : '') + '" data-action="switch-tab" data-value="' + key + '">' + esc(label) + badgeHtml + '</button>';
+    }
+    return '<div class="tabs">' + tabBtn("batches", "Batches", null) + tabBtn("pending", "Pending students", pendingCache.length) + tabBtn("daily", "Daily tasks", null) + '</div>';
+  }
+
+  function saveDotClass(){
+    if(saveState === "ok") return "ok";
+    if(saveState === "busy") return "busy";
+    if(saveState === "err" || saveState === "readonly") return "err";
+    return "";
+  }
+  function saveLabel(){
+    if(saveState === "ok") return "Saved";
+    if(saveState === "busy") return "Saving…";
+    if(saveState === "readonly") return "Read-only here";
+    if(saveState === "err") return "Couldn't save — edits may not persist";
+    return "";
+  }
+
+  function render(){
+    var tabContent;
+    if(activeTab === "batches"){
+      tabContent = renderStats() + renderFilters() + (canWrite ? renderAddForm() : "") + renderBatches();
+    } else if(activeTab === "pending"){
+      tabContent = renderPendingTab();
+    } else {
+      tabContent = renderDailyTab();
+    }
+    root.innerHTML =
+      '<div class="hdr">' +
+        '<div><h1>Batch Checklist Tracker</h1><div class="sub">PSW &amp; ECA batches, pending students, and your daily tasks — all in one place</div></div>' +
+        '<div class="save-state"><span class="save-dot ' + saveDotClass() + '"></span>' + saveLabel() + '</div>' +
+      '</div>' +
+      renderTabs() +
+      tabContent;
+  }
+
+  function findBatch(id){
+    id = Number(id);
+    for(var i=0;i<state.batches.length;i++){ if(state.batches[i].id === id) return state.batches[i]; }
+    return null;
+  }
+  function findDaily(id){
+    id = Number(id);
+    for(var i=0;i<state.dailyTasks.length;i++){ if(state.dailyTasks[i].id === id) return state.dailyTasks[i]; }
+    return null;
+  }
+
+  function getByPath(batch, path){
+    var parts = path.split(".");
+    if(parts.length === 2) return batch.sections[parts[0]][parts[1]];
+    return batch.sections[parts[0]];
+  }
+
+  function scheduleSave(immediate){
+    saveState = "busy";
+    if(saveTimer) clearTimeout(saveTimer);
+    if(immediate){
+      doSave();
+    } else {
+      saveTimer = setTimeout(doSave, 700);
+    }
+  }
+
+  function buildFullDocument(){
+    var titleTag = document.querySelector("title") ? document.querySelector("title").outerHTML : "<title>Batch Checklist Tracker</title>";
+    var fontLink = document.querySelector('link[rel="stylesheet"]');
+    var fontTag = fontLink ? fontLink.outerHTML : "";
+    var styleTag = document.getElementById("app-style").outerHTML;
+    var shell = '<div id="root"></div>';
+    var json = JSON.stringify(state).replace(/</g, "\\u003c");
+    var dataScript = '<script id="state-data" type="application/json">' + json + '<' + '/script>';
+    var logicScript = document.getElementById("app-logic").outerHTML;
+    return titleTag + fontTag + styleTag + shell + dataScript + logicScript;
+  }
+
+  function doSave(){
+    if(!artifactCap){
+      saveState = "err";
+      render();
+      return;
+    }
+    var fullHtml = '<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,-apple-system,sans-serif;background:#fafafa}img{max-width:100%}[hidden]{display:none!important}</style></head><body>' + buildFullDocument() + '</body></html>';
+    artifactCap.publish(fullHtml).then(function(){
+      saveState = "ok";
+      render();
+    }, function(err){
+      var code = err && err.code;
+      if(code === "not_granted" || code === "not_writer"){
+        canWrite = false;
+        saveState = "readonly";
+      } else if(code === "conflict"){
+        saveState = "ok"; // another save won; this view reloads to it
+      } else {
+        saveState = "err";
+      }
+      render();
+    });
+  }
+
+  function uid(){
+    var id = state.nextId || 1;
+    state.nextId = id + 1;
+    return id;
+  }
+
+  // ---- Pending students (db capability) ----
+  function initDb(){
+    if(!(window.claude && window.claude.use)) { pendingDbState = "unavailable"; render(); return; }
+    window.claude.use("db").then(function(cap){
+      dbCap = cap;
+      if(!cap){
+        pendingDbState = "unavailable";
+        render();
+        return;
+      }
+      var col = cap.collection("pending_students");
+      col.onSnapshot(function(snap){
+        pendingCache = snap.docs.map(function(d){
+          var data = d.data() || {};
+          return {id:d.id, name:data.name, batch:data.batch, pending:data.pending, addedAt:data.addedAt};
+        });
+        pendingCache.sort(function(a,b){ return (a.addedAt || "").localeCompare(b.addedAt || ""); });
+        pendingDbState = "ok";
+        render();
+      }, function(err){
+        pendingDbState = "error";
+        canWritePending = false;
+        render();
+      });
+    });
+  }
+
+  function addPendingStudent(name, batch, pending){
+    if(!dbCap) return;
+    dbCap.collection("pending_students").add({
+      name: name, batch: batch, pending: pending, addedAt: new Date().toISOString()
+    }).catch(function(){ /* surfaced via UI state already */ });
+  }
+  function clearPendingStudent(id){
+    if(!dbCap) return;
+    dbCap.collection("pending_students").doc(id).delete().catch(function(){ /* ignore */ });
+  }
+
+  root.addEventListener("click", function(e){
+    var el = e.target.closest("[data-action]");
+    if(!el) return;
+    var action = el.getAttribute("data-action");
+
+    if(action === "switch-tab"){
+      activeTab = el.getAttribute("data-value");
+      render();
+      return;
+    }
+    if(action === "toggle-batch"){
+      if(e.target.closest("input,select,button")) return;
+      var b = findBatch(el.getAttribute("data-batch"));
+      if(b){ b.expanded = !b.expanded; render(); scheduleSave(); }
+      return;
+    }
+    if(action === "add-batch"){
+      var nameInput = document.getElementById("new-batch-name");
+      var name = nameInput.value.trim();
+      var programSel = document.getElementById("new-batch-program");
+      var campusSel = document.getElementById("new-batch-campus");
+      if(!name){ nameInput.focus(); return; }
+      if(!programSel.value){ programSel.focus(); return; }
+      state.batches.unshift({
+        id: uid(),
+        name: name,
+        program: programSel.value,
+        campus: campusSel.value,
+        expanded: true,
+        example: false,
+        createdAt: new Date().toISOString(),
+        sections: emptySections(programSel.value)
+      });
+      render();
+      scheduleSave(true);
+      return;
+    }
+    if(action === "confirm-delete"){
+      var footer = el.closest(".card-footer");
+      footer.innerHTML = '<span class="confirm-row">Delete this batch? <button type="button" class="danger-ghost small" data-action="delete-yes" data-batch="' + el.getAttribute("data-batch") + '">Yes, delete</button> <button type="button" class="ghost small" data-action="delete-no">Cancel</button></span>';
+      return;
+    }
+    if(action === "delete-yes"){
+      var bid = Number(el.getAttribute("data-batch"));
+      state.batches = state.batches.filter(function(b){ return b.id !== bid; });
+      render();
+      scheduleSave(true);
+      return;
+    }
+    if(action === "delete-no"){ render(); return; }
+
+    if(action === "filter-program"){ state.filter.program = el.getAttribute("data-value"); render(); scheduleSave(); return; }
+    if(action === "filter-campus"){ state.filter.campus = el.getAttribute("data-value"); render(); scheduleSave(); return; }
+    if(action === "filter-status"){ state.filter.status = el.getAttribute("data-value"); render(); scheduleSave(); return; }
+
+    if(action === "add-pending"){
+      var nName = document.getElementById("new-pending-name");
+      var nBatch = document.getElementById("new-pending-batch");
+      var nNote = document.getElementById("new-pending-note");
+      var nameVal = nName.value.trim();
+      if(!nameVal){ nName.focus(); return; }
+      addPendingStudent(nameVal, nBatch.value.trim(), nNote.value.trim());
+      nName.value = ""; nBatch.value = ""; nNote.value = "";
+      nName.focus();
+      return;
+    }
+    if(action === "confirm-clear-pending"){
+      var pfooter = el.closest(".card-footer");
+      pfooter.innerHTML = '<span class="confirm-row">Clear this entry? <button type="button" class="danger-ghost small" data-action="clear-pending-yes" data-pending="' + esc(el.getAttribute("data-pending")) + '">Yes, clear</button> <button type="button" class="ghost small" data-action="clear-pending-no">Cancel</button></span>';
+      return;
+    }
+    if(action === "clear-pending-yes"){
+      clearPendingStudent(el.getAttribute("data-pending"));
+      return;
+    }
+    if(action === "clear-pending-no"){ render(); return; }
+
+    if(action === "add-daily"){
+      var tInput = document.getElementById("new-daily-text");
+      var text = tInput.value.trim();
+      if(!text){ tInput.focus(); return; }
+      state.dailyTasks.push({id: uid(), text: text, done: false, addedAt: new Date().toISOString()});
+      render();
+      scheduleSave(true);
+      return;
+    }
+    if(action === "delete-daily"){
+      var did = Number(el.getAttribute("data-daily"));
+      state.dailyTasks = state.dailyTasks.filter(function(t){ return t.id !== did; });
+      render();
+      scheduleSave(true);
+      return;
+    }
+    if(action === "clear-done-daily"){
+      state.dailyTasks = state.dailyTasks.filter(function(t){ return !t.done; });
+      render();
+      scheduleSave(true);
+      return;
+    }
+  });
+
+  root.addEventListener("change", function(e){
+    var el = e.target;
+    var action = el.getAttribute("data-action");
+    if(action === "toggle-item"){
+      var b = findBatch(el.getAttribute("data-batch"));
+      if(!b) return;
+      var item = getByPath(b, el.getAttribute("data-path"));
+      item.done = el.checked;
+      render();
+      scheduleSave(true);
+      return;
+    }
+    if(action === "set-program"){
+      var b2 = findBatch(el.getAttribute("data-batch"));
+      if(b2){
+        var newProgram = el.value;
+        if(newProgram !== b2.program){
+          b2.program = newProgram;
+          b2.sections = emptySections(newProgram);
+        }
+        render();
+        scheduleSave(true);
+      }
+      return;
+    }
+    if(action === "set-campus"){
+      var b3 = findBatch(el.getAttribute("data-batch"));
+      if(b3){ b3.campus = el.value; render(); scheduleSave(true); }
+      return;
+    }
+    if(action === "toggle-daily"){
+      var t = findDaily(el.getAttribute("data-daily"));
+      if(t){ t.done = el.checked; render(); scheduleSave(true); }
+      return;
+    }
+  });
+
+  root.addEventListener("input", function(e){
+    var el = e.target;
+    var action = el.getAttribute("data-action");
+    if(action === "note-item"){
+      var b = findBatch(el.getAttribute("data-batch"));
+      if(!b) return;
+      var item = getByPath(b, el.getAttribute("data-path"));
+      item.note = el.value;
+      scheduleSave(false);
+      return;
+    }
+    if(action === "rename-batch"){
+      var b2 = findBatch(el.getAttribute("data-batch"));
+      if(b2){ b2.name = el.value; scheduleSave(false); }
+      return;
+    }
+    if(action === "search"){
+      state.filter.q = el.value;
+      render();
+      var s = root.querySelector(".search");
+      if(s){ s.focus(); s.setSelectionRange(s.value.length, s.value.length); }
+      scheduleSave(false);
+      return;
+    }
+  });
+
+  render();
+
+  if(window.claude && window.claude.use){
+    window.claude.use("artifact").then(function(cap){ artifactCap = cap; });
+  }
+  initDb();
+})();
+</script>
+
+</body></html>

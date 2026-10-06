@@ -148,7 +148,7 @@ button:disabled{opacity:.5;cursor:not-allowed}
 </style>
 <div id="root"></div>
 <script id="state-data" type="application/json">
-{"nextId":3,"filter":{"program":"PSW","campus":"all","status":"complete","q":""},"dailyTasks":[],"batches":[{"id":2,"name":"26 June M(A)","program":"ECA","campus":"Mississauga","expanded":true,"example":false,"createdAt":"2026-10-06T00:56:31.338Z","sections":{"part1":{"assignmentSubmissions":{"done":false,"note":""},"placementBooklet":{"done":false,"note":""},"attendanceMarking":{"done":false,"note":""}},"part2":{"assignmentSubmissions":{"done":false,"note":""},"attendanceForms":{"done":false,"note":""},"attendanceMarking":{"done":false,"note":""}}}},{"id":1,"name":"21 July M(A)","program":"PSW","campus":"Mississauga","expanded":true,"example":true,"createdAt":"2026-07-21T00:00:00.000Z","sections":{"performance":{"dates":{"done":true,"note":"Jul 21–25"},"instructor":{"done":true,"note":"J. Grant"},"grades":{"done":false,"note":""}},"moodle":{"submissions":{"done":true,"note":"18/20 in"},"grading":{"done":true,"note":""}},"rewrites":{"done":false,"note":""},"attendance":{"done":true,"note":"Confirmed with instructor"}}}]}
+{"nextId":3,"filter":{"program":"PSW","campus":"all","status":"complete","q":""},"dailyTasks":[],"pendingStudents":[],"batches":[{"id":2,"name":"26 June M(A)","program":"ECA","campus":"Mississauga","expanded":true,"example":false,"createdAt":"2026-10-06T00:56:31.338Z","sections":{"part1":{"assignmentSubmissions":{"done":false,"note":""},"placementBooklet":{"done":false,"note":""},"attendanceMarking":{"done":false,"note":""}},"part2":{"assignmentSubmissions":{"done":false,"note":""},"attendanceForms":{"done":false,"note":""},"attendanceMarking":{"done":false,"note":""}}}},{"id":1,"name":"21 July M(A)","program":"PSW","campus":"Mississauga","expanded":true,"example":true,"createdAt":"2026-07-21T00:00:00.000Z","sections":{"performance":{"dates":{"done":true,"note":"Jul 21–25"},"instructor":{"done":true,"note":"J. Grant"},"grades":{"done":false,"note":""}},"moodle":{"submissions":{"done":true,"note":"18/20 in"},"grading":{"done":true,"note":""}},"rewrites":{"done":false,"note":""},"attendance":{"done":true,"note":"Confirmed with instructor"}}}]}
 </script>
 <script id="app-logic">
 (function(){
@@ -157,6 +157,7 @@ button:disabled{opacity:.5;cursor:not-allowed}
   var stateScript = document.getElementById("state-data");
   var state = JSON.parse(stateScript.textContent);
   if(!state.dailyTasks) state.dailyTasks = [];
+  if(!state.pendingStudents) state.pendingStudents = [];
   if(!state.filter) state.filter = {program:"all",campus:"all",status:"all",q:""};
   if(!state.nextId) state.nextId = 1;
 
@@ -165,11 +166,6 @@ button:disabled{opacity:.5;cursor:not-allowed}
   var saveTimer = null;
   var saveState = "idle"; // idle | busy | ok | err | readonly
   var activeTab = "batches"; // batches | pending | daily (not persisted — resets to Batches on open)
-
-  var dbCap = null;
-  var pendingCache = [];
-  var pendingDbState = "init"; // init | ok | unavailable | error
-  var canWritePending = true;
 
   var TEMPLATES = {
     PSW: { groups: [
@@ -396,7 +392,7 @@ button:disabled{opacity:.5;cursor:not-allowed}
   }
 
   function renderPendingTab(){
-    var addForm = (canWritePending && pendingDbState === "ok") ? (
+    var addForm = canWrite ? (
       '<div class="panel"><div class="add-form">' +
         '<div class="field grow"><label>Student name</label><input type="text" id="new-pending-name" placeholder="e.g. Priya Nair"></div>' +
         '<div class="field grow"><label>Batch</label><input type="text" id="new-pending-batch" placeholder="e.g. 21 July M(A)"></div>' +
@@ -405,15 +401,12 @@ button:disabled{opacity:.5;cursor:not-allowed}
       '</div></div>'
     ) : "";
 
+    var items = state.pendingStudents || [];
     var list;
-    if(pendingDbState === "unavailable"){
-      list = '<div class="panel empty">Pending students needs this artifact’s database, which isn’t available in this view.</div>';
-    } else if(pendingDbState === "init"){
-      list = '<div class="panel empty">Loading pending list…</div>';
-    } else if(pendingCache.length === 0){
+    if(items.length === 0){
       list = '<div class="panel empty">Nothing pending right now. Students you flag here stay listed — and in your daily reminder email — until you clear them.</div>';
     } else {
-      list = '<div class="batches">' + pendingCache.map(renderPendingRow).join("") + '</div>';
+      list = '<div class="batches">' + items.map(renderPendingRow).join("") + '</div>';
     }
     return addForm + list;
   }
@@ -432,7 +425,7 @@ button:disabled{opacity:.5;cursor:not-allowed}
           '</div>' +
           '<div class="card-footer">' +
             '<span class="meta-note">Flagged ' + esc(p.addedAt ? new Date(p.addedAt).toLocaleDateString() : "") + '</span>' +
-            (canWritePending ? ('<button type="button" class="danger-ghost" data-action="confirm-clear-pending" data-pending="' + esc(p.id) + '">Clear</button>') : "") +
+            (canWrite ? ('<button type="button" class="danger-ghost" data-action="confirm-clear-pending" data-pending="' + esc(p.id) + '">Clear</button>') : "") +
           '</div>' +
         '</div>' +
       '</div>'
@@ -473,7 +466,7 @@ button:disabled{opacity:.5;cursor:not-allowed}
       var badgeHtml = badge != null ? ('<span class="tab-badge' + (badge === 0 ? ' zero' : '') + '">' + badge + '</span>') : "";
       return '<button type="button" class="tab-btn' + (activeTab === key ? ' active' : '') + '" data-action="switch-tab" data-value="' + key + '">' + esc(label) + badgeHtml + '</button>';
     }
-    return '<div class="tabs">' + tabBtn("batches", "Batches", null) + tabBtn("pending", "Pending students", pendingCache.length) + tabBtn("daily", "Daily tasks", null) + '</div>';
+    return '<div class="tabs">' + tabBtn("batches", "Batches", null) + tabBtn("pending", "Pending students", (state.pendingStudents || []).length) + tabBtn("daily", "Daily tasks", null) + '</div>';
   }
 
   function saveDotClass(){
@@ -577,42 +570,8 @@ button:disabled{opacity:.5;cursor:not-allowed}
     return id;
   }
 
-  // ---- Pending students (db capability) ----
-  function initDb(){
-    if(!(window.claude && window.claude.use)) { pendingDbState = "unavailable"; render(); return; }
-    window.claude.use("db").then(function(cap){
-      dbCap = cap;
-      if(!cap){
-        pendingDbState = "unavailable";
-        render();
-        return;
-      }
-      var col = cap.collection("pending_students");
-      col.onSnapshot(function(snap){
-        pendingCache = snap.docs.map(function(d){
-          var data = d.data() || {};
-          return {id:d.id, name:data.name, batch:data.batch, pending:data.pending, addedAt:data.addedAt};
-        });
-        pendingCache.sort(function(a,b){ return (a.addedAt || "").localeCompare(b.addedAt || ""); });
-        pendingDbState = "ok";
-        render();
-      }, function(err){
-        pendingDbState = "error";
-        canWritePending = false;
-        render();
-      });
-    });
-  }
-
-  function addPendingStudent(name, batch, pending){
-    if(!dbCap) return;
-    dbCap.collection("pending_students").add({
-      name: name, batch: batch, pending: pending, addedAt: new Date().toISOString()
-    }).catch(function(){ /* surfaced via UI state already */ });
-  }
-  function clearPendingStudent(id){
-    if(!dbCap) return;
-    dbCap.collection("pending_students").doc(id).delete().catch(function(){ /* ignore */ });
+  function uidStr(){
+    return "p" + Date.now().toString(36) + Math.random().toString(36).slice(2,7);
   }
 
   root.addEventListener("click", function(e){
@@ -676,9 +635,15 @@ button:disabled{opacity:.5;cursor:not-allowed}
       var nNote = document.getElementById("new-pending-note");
       var nameVal = nName.value.trim();
       if(!nameVal){ nName.focus(); return; }
-      addPendingStudent(nameVal, nBatch.value.trim(), nNote.value.trim());
-      nName.value = ""; nBatch.value = ""; nNote.value = "";
-      nName.focus();
+      state.pendingStudents.push({
+        id: uidStr(),
+        name: nameVal,
+        batch: nBatch.value.trim(),
+        pending: nNote.value.trim(),
+        addedAt: new Date().toISOString()
+      });
+      render();
+      scheduleSave(true);
       return;
     }
     if(action === "confirm-clear-pending"){
@@ -687,7 +652,10 @@ button:disabled{opacity:.5;cursor:not-allowed}
       return;
     }
     if(action === "clear-pending-yes"){
-      clearPendingStudent(el.getAttribute("data-pending"));
+      var pid = el.getAttribute("data-pending");
+      state.pendingStudents = state.pendingStudents.filter(function(p){ return p.id !== pid; });
+      render();
+      scheduleSave(true);
       return;
     }
     if(action === "clear-pending-no"){ render(); return; }
@@ -784,7 +752,6 @@ button:disabled{opacity:.5;cursor:not-allowed}
   if(window.claude && window.claude.use){
     window.claude.use("artifact").then(function(cap){ artifactCap = cap; });
   }
-  initDb();
 })();
 </script>
 

@@ -1,7 +1,11 @@
-<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Batch Checklist Tracker</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap">
-<style id="app-style">
+<style>
 /* Layout: sticky summary header, tab nav (Batches / Pending students / Daily tasks), responsive card grid below */
 :root{
   --bg:#eef2f0;
@@ -24,7 +28,7 @@
   --font-mono:'IBM Plex Mono',monospace;
 }
 @media (prefers-color-scheme: dark){
-  :root:not([data-theme="light"]){
+  :root{
     color-scheme:dark;
     --bg:#121715;
     --surface:#1a211e;
@@ -43,32 +47,15 @@
     --danger:#e07a7a;
   }
 }
-:root[data-theme="dark"]{
-  color-scheme:dark;
-  --bg:#121715;
-  --surface:#1a211e;
-  --fg:#e9efec;
-  --muted:#9aa8a1;
-  --line:#2a332e;
-  --accent:#4fcbb0;
-  --accent-ink:#0c1a16;
-  --accent-soft:#1b3630;
-  --done:#4fcb84;
-  --done-soft:#17301f;
-  --partial:#e0a84f;
-  --partial-soft:#352a16;
-  --none:#8a9089;
-  --none-soft:#242a26;
-  --danger:#e07a7a;
-}
 *{box-sizing:border-box}
+html,body{margin:0}
 body{background:var(--bg);color:var(--fg);font-family:var(--font-body)}
-#root{padding:16px;padding-block:20px 48px;max-width:960px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
-h1,h2,h3{font-family:var(--font-display);margin:0;text-wrap:balance}
+#root{padding:16px 16px 48px;max-width:960px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+h1,h2,h3{font-family:var(--font-display);margin:0}
 .hdr{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:8px}
 .hdr h1{font-size:22px;letter-spacing:-0.01em}
 .hdr .sub{color:var(--muted);font-size:13px}
-.save-state{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px;min-width:0}
+.save-state{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px;min-width:0;flex-wrap:wrap}
 .save-dot{width:7px;height:7px;border-radius:50%;background:var(--none);flex:none}
 .save-dot.ok{background:var(--done)}
 .save-dot.busy{background:var(--partial)}
@@ -140,34 +127,31 @@ button:disabled{opacity:.5;cursor:not-allowed}
 .daily-row input[type=checkbox]{width:18px;height:18px;accent-color:var(--accent);flex:none}
 .daily-row .txt{flex:1;min-width:0;font-size:13px;font-weight:500;overflow-wrap:anywhere}
 .daily-row.checked .txt{text-decoration:line-through;color:var(--muted)}
+.loading-screen{display:flex;align-items:center;justify-content:center;min-height:50vh;color:var(--muted);font-size:14px}
 @media (max-width:640px){
   .stats{grid-template-columns:repeat(2,1fr)}
   .progress-wrap{min-width:90px}
   .bar{width:48px}
 }
 </style>
-<div id="root"></div>
-<script id="state-data" type="application/json">
-{"nextId":3,"filter":{"program":"PSW","campus":"all","status":"complete","q":""},"dailyTasks":[],"pendingStudents":[],"batches":[{"id":2,"name":"26 June M(A)","program":"ECA","campus":"Mississauga","expanded":true,"example":false,"createdAt":"2026-10-06T00:56:31.338Z","sections":{"part1":{"assignmentSubmissions":{"done":false,"note":""},"placementBooklet":{"done":false,"note":""},"attendanceMarking":{"done":false,"note":""}},"part2":{"assignmentSubmissions":{"done":false,"note":""},"attendanceForms":{"done":false,"note":""},"attendanceMarking":{"done":false,"note":""}}}},{"id":1,"name":"21 July M(A)","program":"PSW","campus":"Mississauga","expanded":true,"example":true,"createdAt":"2026-07-21T00:00:00.000Z","sections":{"performance":{"dates":{"done":true,"note":"Jul 21–25"},"instructor":{"done":true,"note":"J. Grant"},"grades":{"done":false,"note":""}},"moodle":{"submissions":{"done":true,"note":"18/20 in"},"grading":{"done":true,"note":""}},"rewrites":{"done":false,"note":""},"attendance":{"done":true,"note":"Confirmed with instructor"}}}]}
-</script>
-<script id="app-logic">
+</head>
+<body>
+<div id="root"><div class="loading-screen">Loading your tracker…</div></div>
+<script>
 (function(){
   "use strict";
   var root = document.getElementById("root");
-  var stateScript = document.getElementById("state-data");
-  var state = JSON.parse(stateScript.textContent);
-  if(!state.dailyTasks) state.dailyTasks = [];
-  if(!state.pendingStudents) state.pendingStudents = [];
-  if(!state.filter) state.filter = {program:"all",campus:"all",status:"all",q:""};
-  if(!state.nextId) state.nextId = 1;
+  var API = "/api/state";
 
-  var artifactCap = null;
-  var artifactChecked = false; // true once claude.use("artifact") has resolved (even to null)
-  var canWrite = true; // optimistic until proven otherwise
+  var DEFAULT_STATE = {"nextId":3,"filter":{"program":"PSW","campus":"all","status":"complete","q":""},"dailyTasks":[],"pendingStudents":[],"batches":[{"id":2,"name":"26 June M(A)","program":"ECA","campus":"Mississauga","expanded":true,"example":false,"createdAt":"2026-10-06T00:56:31.338Z","sections":{"part1":{"assignmentSubmissions":{"done":false,"note":""},"placementBooklet":{"done":false,"note":""},"attendanceMarking":{"done":false,"note":""}},"part2":{"assignmentSubmissions":{"done":false,"note":""},"attendanceForms":{"done":false,"note":""},"attendanceMarking":{"done":false,"note":""}}}},{"id":1,"name":"21 July M(A)","program":"PSW","campus":"Mississauga","expanded":true,"example":true,"createdAt":"2026-07-21T00:00:00.000Z","sections":{"performance":{"dates":{"done":true,"note":"Jul 21–25"},"instructor":{"done":true,"note":"J. Grant"},"grades":{"done":false,"note":""}},"moodle":{"submissions":{"done":true,"note":"18/20 in"},"grading":{"done":true,"note":""}},"rewrites":{"done":false,"note":""},"attendance":{"done":true,"note":"Confirmed with instructor"}}}]};
+
+  var state = null;
+  var booted = false;
   var saveTimer = null;
-  var saveState = "idle"; // idle | busy | ok | err | readonly | nocap
+  var saveState = "idle"; // idle | busy | ok | err
   var lastErrorDetail = "";
-  var activeTab = "batches"; // batches | pending | daily (not persisted — resets to Batches on open)
+  var lastSyncedAt = null;
+  var activeTab = "batches"; // batches | pending | daily
 
   var TEMPLATES = {
     PSW: { groups: [
@@ -181,6 +165,16 @@ button:disabled{opacity:.5;cursor:not-allowed}
       {key:"part2", title:"Part 2", items:[["assignmentSubmissions","Assignment submissions"],["attendanceForms","Attendance forms"],["attendanceMarking","Attendance marking"]]}
     ]}
   };
+
+  function normalizeState(s){
+    if(!s || typeof s !== "object") s = JSON.parse(JSON.stringify(DEFAULT_STATE));
+    if(!s.dailyTasks) s.dailyTasks = [];
+    if(!s.pendingStudents) s.pendingStudents = [];
+    if(!s.filter) s.filter = {program:"all",campus:"all",status:"all",q:""};
+    if(!s.nextId) s.nextId = 1;
+    if(!s.batches) s.batches = [];
+    return s;
+  }
 
   function flatItemPaths(program){
     var tpl = TEMPLATES[program];
@@ -311,10 +305,10 @@ button:disabled{opacity:.5;cursor:not-allowed}
     var path = a + (b ? ("." + b) : "");
     return (
       '<label class="item' + (it.done ? ' checked' : '') + '">' +
-        '<input type="checkbox" data-action="toggle-item" data-batch="' + batch.id + '" data-path="' + path + '"' + (it.done ? " checked" : "") + (canWrite ? "" : " disabled") + '>' +
+        '<input type="checkbox" data-action="toggle-item" data-batch="' + batch.id + '" data-path="' + path + '"' + (it.done ? " checked" : "") + '>' +
         '<span class="item-body">' +
           '<span class="item-label">' + esc(label) + '</span>' +
-          '<input type="text" placeholder="Add a note…" data-action="note-item" data-batch="' + batch.id + '" data-path="' + path + '" value="' + esc(it.note) + '"' + (canWrite ? "" : " disabled") + '>' +
+          '<input type="text" placeholder="Add a note…" data-action="note-item" data-batch="' + batch.id + '" data-path="' + path + '" value="' + esc(it.note) + '">' +
         '</span>' +
       '</label>'
     );
@@ -345,13 +339,13 @@ button:disabled{opacity:.5;cursor:not-allowed}
       body = (
         '<div class="card-body">' +
           '<div class="rename-row">' +
-            '<div class="field grow"><label>Batch name</label><input type="text" data-action="rename-batch" data-batch="' + batch.id + '" value="' + esc(batch.name) + '"' + (canWrite ? "" : " disabled") + '></div>' +
-            '<div class="field"><label>Program</label><select data-action="set-program" data-batch="' + batch.id + '"' + (canWrite ? "" : " disabled") + '>' +
+            '<div class="field grow"><label>Batch name</label><input type="text" data-action="rename-batch" data-batch="' + batch.id + '" value="' + esc(batch.name) + '"></div>' +
+            '<div class="field"><label>Program</label><select data-action="set-program" data-batch="' + batch.id + '">' +
               '<option value=""' + (!batch.program ? " selected" : "") + '>—</option>' +
               '<option value="PSW"' + (batch.program==="PSW" ? " selected" : "") + '>PSW</option>' +
               '<option value="ECA"' + (batch.program==="ECA" ? " selected" : "") + '>ECA</option>' +
             '</select></div>' +
-            '<div class="field"><label>Campus</label><select data-action="set-campus" data-batch="' + batch.id + '"' + (canWrite ? "" : " disabled") + '>' +
+            '<div class="field"><label>Campus</label><select data-action="set-campus" data-batch="' + batch.id + '">' +
               '<option value=""' + (!batch.campus ? " selected" : "") + '>—</option>' +
               '<option value="Mississauga"' + (batch.campus==="Mississauga" ? " selected" : "") + '>Mississauga</option>' +
               '<option value="Waterloo"' + (batch.campus==="Waterloo" ? " selected" : "") + '>Waterloo</option>' +
@@ -360,7 +354,7 @@ button:disabled{opacity:.5;cursor:not-allowed}
           renderSectionsForBatch(batch) +
           '<div class="card-footer">' +
             '<span class="meta-note">Added ' + esc(new Date(batch.createdAt).toLocaleDateString()) + '</span>' +
-            (canWrite ? ('<button type="button" class="danger-ghost" data-action="confirm-delete" data-batch="' + batch.id + '">Delete batch</button>') : "") +
+            '<button type="button" class="danger-ghost" data-action="confirm-delete" data-batch="' + batch.id + '">Delete batch</button>' +
           '</div>' +
         '</div>'
       );
@@ -394,14 +388,13 @@ button:disabled{opacity:.5;cursor:not-allowed}
   }
 
   function renderPendingTab(){
-    var addForm = canWrite ? (
+    var addForm =
       '<div class="panel"><div class="add-form">' +
         '<div class="field grow"><label>Student name</label><input type="text" id="new-pending-name" placeholder="e.g. Priya Nair"></div>' +
         '<div class="field grow"><label>Batch</label><input type="text" id="new-pending-batch" placeholder="e.g. 21 July M(A)"></div>' +
         '<div class="field grow"><label>What’s pending</label><input type="text" id="new-pending-note" placeholder="e.g. Missing Part 2 submission"></div>' +
         '<button type="button" data-action="add-pending">Add</button>' +
-      '</div></div>'
-    ) : "";
+      '</div></div>';
 
     var items = state.pendingStudents || [];
     var list;
@@ -427,7 +420,7 @@ button:disabled{opacity:.5;cursor:not-allowed}
           '</div>' +
           '<div class="card-footer">' +
             '<span class="meta-note">Flagged ' + esc(p.addedAt ? new Date(p.addedAt).toLocaleDateString() : "") + '</span>' +
-            (canWrite ? ('<button type="button" class="danger-ghost" data-action="confirm-clear-pending" data-pending="' + esc(p.id) + '">Clear</button>') : "") +
+            '<button type="button" class="danger-ghost" data-action="confirm-clear-pending" data-pending="' + esc(p.id) + '">Clear</button>' +
           '</div>' +
         '</div>' +
       '</div>'
@@ -435,12 +428,11 @@ button:disabled{opacity:.5;cursor:not-allowed}
   }
 
   function renderDailyTab(){
-    var addForm = canWrite ? (
+    var addForm =
       '<div class="panel"><div class="add-form">' +
         '<div class="field grow"><label>New task</label><input type="text" id="new-daily-text" placeholder="e.g. Email Johanna re: Aug cohort"></div>' +
         '<button type="button" data-action="add-daily">Add</button>' +
-      '</div></div>'
-    ) : "";
+      '</div></div>';
     var tasks = state.dailyTasks || [];
     var list;
     if(tasks.length === 0){
@@ -449,16 +441,16 @@ button:disabled{opacity:.5;cursor:not-allowed}
       list = '<div class="panel stack">' + tasks.map(renderDailyRow).join("") + '</div>';
     }
     var hasDone = tasks.some(function(t){ return t.done; });
-    var clearBtn = (canWrite && hasDone) ? '<div class="right"><button type="button" class="ghost small" data-action="clear-done-daily">Clear completed</button></div>' : "";
+    var clearBtn = hasDone ? '<div class="right"><button type="button" class="ghost small" data-action="clear-done-daily">Clear completed</button></div>' : "";
     return addForm + list + clearBtn;
   }
 
   function renderDailyRow(t){
     return (
       '<div class="daily-row' + (t.done ? ' checked' : '') + '">' +
-        '<input type="checkbox" data-action="toggle-daily" data-daily="' + t.id + '"' + (t.done ? " checked" : "") + (canWrite ? "" : " disabled") + '>' +
+        '<input type="checkbox" data-action="toggle-daily" data-daily="' + t.id + '"' + (t.done ? " checked" : "") + '>' +
         '<span class="txt">' + esc(t.text) + '</span>' +
-        (canWrite ? ('<button type="button" class="ghost small" data-action="delete-daily" data-daily="' + t.id + '">Remove</button>') : "") +
+        '<button type="button" class="ghost small" data-action="delete-daily" data-daily="' + t.id + '">Remove</button>' +
       '</div>'
     );
   }
@@ -474,16 +466,16 @@ button:disabled{opacity:.5;cursor:not-allowed}
   function saveDotClass(){
     if(saveState === "ok") return "ok";
     if(saveState === "busy") return "busy";
-    if(saveState === "err" || saveState === "readonly" || saveState === "nocap") return "err";
+    if(saveState === "err") return "err";
     return "";
   }
   function saveLabel(){
-    if(saveState === "ok") return "Saved";
-    if(saveState === "busy") return "Saving…";
-    if(saveState === "readonly") return "Read-only here";
-    if(saveState === "nocap") return "This view can't save — try the claude.ai site or update the Claude app";
-    if(saveState === "err") return "Couldn't save" + (lastErrorDetail ? " (" + esc(lastErrorDetail) + ")" : "") + " — edits may not persist";
-    return "";
+    var base;
+    if(saveState === "ok") base = "Synced" + (lastSyncedAt ? " · " + lastSyncedAt.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : "");
+    else if(saveState === "busy") base = "Syncing…";
+    else if(saveState === "err") base = "Couldn't sync" + (lastErrorDetail ? " (" + esc(lastErrorDetail) + ")" : "") + " — edits are kept locally, tap Retry";
+    else base = "";
+    return base;
   }
   function saveRetryHtml(){
     if(saveState !== "err") return "";
@@ -491,9 +483,10 @@ button:disabled{opacity:.5;cursor:not-allowed}
   }
 
   function render(){
+    if(!state) return;
     var tabContent;
     if(activeTab === "batches"){
-      tabContent = renderStats() + renderFilters() + (canWrite ? renderAddForm() : "") + renderBatches();
+      tabContent = renderStats() + renderFilters() + renderAddForm() + renderBatches();
     } else if(activeTab === "pending"){
       tabContent = renderPendingTab();
     } else {
@@ -501,8 +494,8 @@ button:disabled{opacity:.5;cursor:not-allowed}
     }
     root.innerHTML =
       '<div class="hdr">' +
-        '<div><h1>Batch Checklist Tracker</h1><div class="sub">PSW &amp; ECA batches, pending students, and your daily tasks — all in one place</div></div>' +
-        '<div class="save-state"><span class="save-dot ' + saveDotClass() + '"></span><span>' + saveLabel() + '</span>' + saveRetryHtml() + '</div>' +
+        '<div><h1>Batch Checklist Tracker</h1><div class="sub">PSW &amp; ECA batches, pending students, and your daily tasks — synced across your devices</div></div>' +
+        '<div class="save-state"><span class="save-dot ' + saveDotClass() + '"></span><span>' + saveLabel() + '</span>' + saveRetryHtml() + '<button type="button" class="ghost small" data-action="manual-refresh">Refresh</button></div>' +
       '</div>' +
       renderTabs() +
       tabContent;
@@ -531,50 +524,26 @@ button:disabled{opacity:.5;cursor:not-allowed}
     if(immediate){
       doSave();
     } else {
-      saveTimer = setTimeout(doSave, 700);
+      saveTimer = setTimeout(doSave, 600);
     }
-  }
-
-  function buildFullDocument(){
-    var titleTag = document.querySelector("title") ? document.querySelector("title").outerHTML : "<title>Batch Checklist Tracker</title>";
-    var fontLink = document.querySelector('link[rel="stylesheet"]');
-    var fontTag = fontLink ? fontLink.outerHTML : "";
-    var styleTag = document.getElementById("app-style").outerHTML;
-    var shell = '<div id="root"></div>';
-    var json = JSON.stringify(state).replace(/</g, "\\u003c");
-    var dataScript = '<script id="state-data" type="application/json">' + json + '<' + '/script>';
-    var logicScript = document.getElementById("app-logic").outerHTML;
-    return titleTag + fontTag + styleTag + shell + dataScript + logicScript;
   }
 
   function doSave(){
-    if(!artifactChecked){
-      // claude.use("artifact") hasn't resolved yet — wait briefly and retry once it has,
-      // rather than reporting a false failure during normal page load.
-      saveTimer = setTimeout(doSave, 400);
-      return;
-    }
-    if(!artifactCap){
-      saveState = "nocap";
-      render();
-      return;
-    }
-    var fullHtml = '<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,-apple-system,sans-serif;background:#fafafa}img{max-width:100%}[hidden]{display:none!important}</style></head><body>' + buildFullDocument() + '</body></html>';
-    artifactCap.publish(fullHtml).then(function(){
+    fetch(API, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(state)
+    }).then(function(resp){
+      if(!resp.ok){ return resp.json().then(function(j){ throw new Error((j && j.error) || ("http_" + resp.status)); }); }
+      return resp.json();
+    }).then(function(){
       saveState = "ok";
       lastErrorDetail = "";
+      lastSyncedAt = new Date();
       render();
-    }, function(err){
-      var code = (err && err.code) || "unknown";
-      if(code === "not_granted" || code === "not_writer"){
-        canWrite = false;
-        saveState = "readonly";
-      } else if(code === "conflict"){
-        saveState = "ok"; // another save won; this view reloads to it
-      } else {
-        saveState = "err";
-        lastErrorDetail = code;
-      }
+    }).catch(function(err){
+      saveState = "err";
+      lastErrorDetail = (err && err.message) || "network";
       render();
     });
   }
@@ -584,10 +553,43 @@ button:disabled{opacity:.5;cursor:not-allowed}
     state.nextId = id + 1;
     return id;
   }
-
   function uidStr(){
     return "p" + Date.now().toString(36) + Math.random().toString(36).slice(2,7);
   }
+
+  function fetchState(opts){
+    opts = opts || {};
+    return fetch(API, {headers: {"Accept":"application/json"}}).then(function(resp){
+      if(!resp.ok) throw new Error("http_" + resp.status);
+      return resp.json();
+    }).then(function(data){
+      state = normalizeState(data);
+      booted = true;
+      lastSyncedAt = new Date();
+      if(saveState !== "busy") saveState = "ok";
+      render();
+    }).catch(function(err){
+      if(!booted){
+        // first load failed entirely — show an offline/empty state rather than fabricate data
+        state = normalizeState(null);
+        state.batches = [];
+        booted = true;
+        saveState = "err";
+        lastErrorDetail = (err && err.message) || "network";
+        render();
+      } else if(!opts.silent){
+        saveState = "err";
+        lastErrorDetail = (err && err.message) || "network";
+        render();
+      }
+    });
+  }
+
+  document.addEventListener("visibilitychange", function(){
+    if(document.visibilityState === "visible" && booted && saveState !== "busy"){
+      fetchState({silent:true});
+    }
+  });
 
   root.addEventListener("click", function(e){
     var el = e.target.closest("[data-action]");
@@ -599,6 +601,11 @@ button:disabled{opacity:.5;cursor:not-allowed}
       render();
       return;
     }
+    if(action === "manual-refresh"){
+      fetchState();
+      return;
+    }
+    if(action === "retry-save"){ scheduleSave(true); return; }
     if(action === "toggle-batch"){
       if(e.target.closest("input,select,button")) return;
       var b = findBatch(el.getAttribute("data-batch"));
@@ -639,7 +646,6 @@ button:disabled{opacity:.5;cursor:not-allowed}
       return;
     }
     if(action === "delete-no"){ render(); return; }
-    if(action === "retry-save"){ scheduleSave(true); return; }
 
     if(action === "filter-program"){ state.filter.program = el.getAttribute("data-value"); render(); scheduleSave(); return; }
     if(action === "filter-campus"){ state.filter.campus = el.getAttribute("data-value"); render(); scheduleSave(); return; }
@@ -763,18 +769,8 @@ button:disabled{opacity:.5;cursor:not-allowed}
     }
   });
 
-  render();
-
-  if(window.claude && window.claude.use){
-    window.claude.use("artifact").then(function(cap){
-      artifactCap = cap;
-      artifactChecked = true;
-      if(!cap && saveState === "busy"){ saveState = "nocap"; render(); }
-    });
-  } else {
-    artifactChecked = true;
-  }
+  fetchState();
 })();
 </script>
-
-</body></html>
+</body>
+</html>
